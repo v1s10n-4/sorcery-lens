@@ -2,12 +2,13 @@
 Centralised configuration — all values come from environment variables.
 Never hardcode secrets here or anywhere else in this codebase.
 """
-from pydantic_settings import BaseSettings
-from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
+
     # Auth
     api_keys: str  # comma-separated raw values; validated on startup
 
@@ -24,10 +25,6 @@ class Settings(BaseSettings):
     # Index paths
     embeddings_path: str = "data/embeddings.npz"
     index_path: str = "data/index.json"
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
 
     @property
     def api_key_set(self) -> set[str]:

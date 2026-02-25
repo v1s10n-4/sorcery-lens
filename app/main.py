@@ -9,6 +9,7 @@ Design constraints:
 """
 import logging
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,11 +26,27 @@ from app.rate_limit import limiter
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("sorcery-lens")
 
+
+# ── Lifespan: pre-warm model + index ─────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Pre-warming CLIP model and FAISS index...")
+    try:
+        _load_model()
+        _load_index()
+        logger.info("Warm-up complete.")
+    except Exception as exc:
+        logger.error("Startup warm-up failed (index may not exist yet): %s", exc)
+    yield
+    # shutdown — nothing to clean up (FAISS index is in-memory)
+
+
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="sorcery-lens",
     description="Private card recognition API for Sorcery: Contested Realm",
     version="0.1.0",
+    lifespan=lifespan,
     docs_url=None,   # No public Swagger UI
     redoc_url=None,  # No public ReDoc
     openapi_url=None,  # No public schema endpoint — IP protection
@@ -50,19 +67,6 @@ app.add_middleware(
     allow_methods=["POST"],
     allow_headers=["Authorization", "Content-Type"],
 )
-
-# ── Startup: pre-warm model + index ──────────────────────────────────────────
-@app.on_event("startup")
-async def startup_event():
-    logger.info("Pre-warming CLIP model and FAISS index...")
-    try:
-        _load_model()
-        _load_index()
-        logger.info("Warm-up complete.")
-    except Exception as exc:
-        logger.error("Startup warm-up failed: %s", exc)
-        # Don't crash — index may not exist yet in dev
-
 
 # ── Health check (no auth — used by platform health probes) ──────────────────
 @app.get("/health")
