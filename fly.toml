@@ -11,11 +11,20 @@ primary_region = "cdg"
 [http_service]
   internal_port = 8000
   force_https = true
-  auto_stop_machines = false   # keep model hot — no cold starts
+  auto_stop_machines = false
   auto_start_machines = true
   min_machines_running = 1
 
+  # Model loading takes ~5min on shared CPU. Grace period prevents
+  # Fly from marking the machine unhealthy during startup.
+  [[http_service.checks]]
+    grace_period = "300s"
+    interval = "30s"
+    timeout = "10s"
+    method = "GET"
+    path = "/health"
+
 [[vm]]
-  memory = "1gb"
+  memory = "2gb"
   cpu_kind = "shared"
   cpus = 1

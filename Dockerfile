@@ -46,11 +46,10 @@ RUN mkdir -p /home/lens/.cache
 COPY --from=builder /root/.cache/clip /home/lens/.cache/clip
 RUN chown -R lens:lens /home/lens/.cache
 
-# Copy application code
+# Copy application code + pre-built embeddings (5.5MB — small enough to bake in)
 COPY app/ ./app/
-
-# Data directory — embeddings mounted at runtime via Render disk/env
-RUN mkdir -p data && chown lens:lens data
+COPY data/ ./data/
+RUN chown -R lens:lens /app
 
 USER lens
 
