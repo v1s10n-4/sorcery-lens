@@ -3,14 +3,22 @@ Centralised configuration — all values come from environment variables.
 Never hardcode secrets here or anywhere else in this codebase.
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import AliasChoices, Field
 from typing import List
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
 
     # Auth
-    api_keys: str  # comma-separated raw values; validated on startup
+    api_keys: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("API_KEYS", "API_KEY"),
+    )  # comma-separated raw values; validated on startup
 
     # CORS
     allowed_origins: str = "https://sorcery-companion.vercel.app"
@@ -29,6 +37,8 @@ class Settings(BaseSettings):
     @property
     def api_key_set(self) -> set[str]:
         """Return the set of valid API keys (stripped, non-empty)."""
+        if not self.api_keys:
+            return set()
         return {k.strip() for k in self.api_keys.split(",") if k.strip()}
 
     @property
