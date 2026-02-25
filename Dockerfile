@@ -15,20 +15,19 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download CLIP ViT-B/32 weights into a known cache dir.
-# open_clip's OpenAI loader uses XDG_CACHE_HOME (not TORCH_HOME) — it writes
-# to ~/.cache/clip by default. Set XDG_CACHE_HOME so the weights land in a
-# path we can COPY to the runtime stage and avoid any runtime download.
-ENV XDG_CACHE_HOME=/opt/model_cache
-ENV TORCH_HOME=/opt/model_cache
+# Pre-download CLIP ViT-B/32 weights.
+# open_clip's openai loader is hardcoded to os.path.expanduser("~/.cache/clip")
+# — it ignores XDG_CACHE_HOME and TORCH_HOME. In the build stage root's home
+# is /root, so weights land at /root/.cache/clip. We copy that into the
+# runtime image below and place it where the lens user's ~/ resolves to.
 RUN python -c "import open_clip; open_clip.create_model_and_transforms('ViT-B-32', pretrained='openai')"
 
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM python:3.12-slim AS runtime
 
-# Security: non-root user
-RUN groupadd -r lens && useradd -r -g lens -d /app -s /bin/false lens
+# Security: non-root user. Home set to /home/lens (writable, not /app).
+RUN groupadd -r lens && useradd -r -g lens -d /home/lens -s /bin/false -m lens
 
 WORKDIR /app
 
@@ -40,13 +39,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy pre-downloaded model weights — zero network dependency at runtime.
-# XDG_CACHE_HOME must match what was set in the build stage so open_clip
-# finds the cached weights without attempting any downloads (which would
-# fail with PermissionError under the non-root lens user).
-COPY --from=builder /opt/model_cache /opt/model_cache
-ENV XDG_CACHE_HOME=/opt/model_cache
-ENV TORCH_HOME=/opt/model_cache
+# Copy pre-downloaded weights into the lens user's ~/.cache/clip so open_clip
+# finds them without any network access at runtime.
+# Must run before USER lens (we're still root here, so we can chown).
+RUN mkdir -p /home/lens/.cache
+COPY --from=builder /root/.cache/clip /home/lens/.cache/clip
+RUN chown -R lens:lens /home/lens/.cache
 
 # Copy application code
 COPY app/ ./app/
@@ -58,6 +56,7 @@ USER lens
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+ENV HOME=/home/lens
 
 EXPOSE 8000
 
