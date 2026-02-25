@@ -1,0 +1,13 @@
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.20
+open-clip-torch==2.26.1
+faiss-cpu==1.9.0
+Pillow==11.0.0
+numpy==1.26.4
+httpx==0.28.1
+slowapi==0.1.9
+python-dotenv==1.0.1
+pydantic-settings==2.7.0
+# Embedding generation script deps (not needed in the production Docker image)
+psycopg2-binary==2.9.10

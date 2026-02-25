@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  lens:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount pre-generated embeddings at runtime (never baked into the image)
+      - ./data:/app/data:ro
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s  # Model load takes time on cold start
