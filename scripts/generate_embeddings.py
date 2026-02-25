@@ -19,7 +19,7 @@ Options:
   --dry-run     Print plan, no encode
 
 Environment variables (required):
-  COMPANION_DB_URL  Postgres connection string (never hardcode)
+  DATABASE_URL  Postgres connection string (never hardcode)
 
 Environment variables (optional):
   R2_PUBLIC_BASE    R2 CDN base URL (default: see DEFAULT_R2_BASE below)
@@ -64,34 +64,35 @@ logger = logging.getLogger("generate-embeddings")
 
 def fetch_card_variants(db_url: str, limit: Optional[int] = None) -> list[dict]:
     """
-    Query sorcery-companion Prisma/Postgres DB for card variants.
+    Query sorcery-companion Postgres DB for card variants.
 
-    Returns list of {cardId, name, slug} sorted by cardId then slug.
+    Returns list of {cardId, name, slug} sorted by card name then finish.
     Each variant has its own image on R2.
     """
     logger.info("Connecting to companion DB...")
     conn = psycopg2.connect(db_url)
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-    # Query: join cards ← variants, get all fields we need
-    # Prisma schema convention: table "Card" → "card", "CardVariant" → "card_variant"
-    # Adjust table/column names if Prisma mapped them differently.
+    # Actual Postgres table names: Prisma keeps PascalCase (must be quoted)
     query = """
         SELECT
-            c.id        AS "cardId",
-            c.name      AS name,
-            v.slug      AS slug
-        FROM "CardVariant" v
-        JOIN "Card" c ON c.id = v."cardId"
-        WHERE v.slug IS NOT NULL
-          AND v.slug != ''
-        ORDER BY c.id, v.slug
+            cv.slug     AS slug,
+            c.id        AS card_id,
+            c.name      AS name
+        FROM "CardVariant" cv
+        JOIN "Card" c ON cv."cardId" = c.id
+        WHERE cv.slug IS NOT NULL
+          AND cv.slug != ''
+        ORDER BY c.name, cv.finish
     """
     if limit:
         query += f" LIMIT {int(limit)}"
 
     cur.execute(query)
-    rows = [dict(r) for r in cur.fetchall()]
+    rows = [
+        {"cardId": r["card_id"], "name": r["name"], "slug": r["slug"]}
+        for r in cur.fetchall()
+    ]
     cur.close()
     conn.close()
 
@@ -308,12 +309,12 @@ def main():
     args = parse_args()
 
     # ── Secrets from env — never from args or hardcoded ──────────────────────
-    db_url = os.environ.get("COMPANION_DB_URL")
+    db_url = os.environ.get("DATABASE_URL")
     if not db_url:
         logger.error(
-            "COMPANION_DB_URL environment variable is required.\n"
+            "DATABASE_URL environment variable is required.\n"
             "Set it in your .env file or export it before running this script.\n"
-            "Example: export COMPANION_DB_URL=postgresql://user:pass@host:5432/db"
+            "Example: export DATABASE_URL=postgresql://user:pass@host:5432/db"
         )
         sys.exit(1)
 
