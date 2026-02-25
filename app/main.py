@@ -7,8 +7,8 @@ Design constraints:
   - Auth is required on every endpoint
   - Rate limiting is per API key
 """
+import asyncio
 import logging
-import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException, Request, status
@@ -31,12 +31,16 @@ logger = logging.getLogger("sorcery-lens")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Pre-warming CLIP model and FAISS index...")
+    # Both calls are blocking/CPU-bound — run in thread pool so the event loop
+    # stays free. Model load is fatal; index load logs but doesn't crash
+    # (allows local dev without embeddings mounted).
+    await asyncio.to_thread(_load_model)
+    logger.info("CLIP model ready.")
     try:
-        _load_model()
-        _load_index()
-        logger.info("Warm-up complete.")
+        await asyncio.to_thread(_load_index)
+        logger.info("FAISS index ready.")
     except Exception as exc:
-        logger.error("Startup warm-up failed (index may not exist yet): %s", exc)
+        logger.error("Index load failed (embeddings not mounted?): %s", exc)
     yield
     # shutdown — nothing to clean up (FAISS index is in-memory)
 
@@ -105,9 +109,11 @@ async def identify(
             detail=f"Image exceeds maximum size of {MAX_IMAGE_BYTES // 1024 // 1024} MB",
         )
 
-    # Process — image bytes stay in memory, never written anywhere
+    # Process — image bytes stay in memory, never written anywhere.
+    # identify_image is CPU-bound (CLIP inference); run in thread pool to avoid
+    # blocking the event loop and crashing the anyio TaskGroup.
     try:
-        result = identify_image(data)
+        result = await asyncio.to_thread(identify_image, data)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
