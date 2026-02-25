@@ -16,9 +16,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download CLIP ViT-B/32 weights into a known cache dir.
-# Without this, the first request triggers a 354MB download at runtime
-# inside an async handler → blocks event loop → anyio TaskGroup crash.
-ENV TORCH_HOME=/opt/torch_cache
+# open_clip's OpenAI loader uses XDG_CACHE_HOME (not TORCH_HOME) — it writes
+# to ~/.cache/clip by default. Set XDG_CACHE_HOME so the weights land in a
+# path we can COPY to the runtime stage and avoid any runtime download.
+ENV XDG_CACHE_HOME=/opt/model_cache
+ENV TORCH_HOME=/opt/model_cache
 RUN python -c "import open_clip; open_clip.create_model_and_transforms('ViT-B-32', pretrained='openai')"
 
 
@@ -38,9 +40,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy pre-downloaded model weights — zero network dependency at runtime
-COPY --from=builder /opt/torch_cache /opt/torch_cache
-ENV TORCH_HOME=/opt/torch_cache
+# Copy pre-downloaded model weights — zero network dependency at runtime.
+# XDG_CACHE_HOME must match what was set in the build stage so open_clip
+# finds the cached weights without attempting any downloads (which would
+# fail with PermissionError under the non-root lens user).
+COPY --from=builder /opt/model_cache /opt/model_cache
+ENV XDG_CACHE_HOME=/opt/model_cache
+ENV TORCH_HOME=/opt/model_cache
 
 # Copy application code
 COPY app/ ./app/
