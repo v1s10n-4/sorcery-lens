@@ -75,7 +75,7 @@ async def health():
 
 
 # ── Identify ──────────────────────────────────────────────────────────────────
-MAX_IMAGE_BYTES = 2 * 1024 * 1024  # 2 MB
+MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10 MB — phone photos can be 3-5 MB
 
 
 @app.post("/identify")
@@ -88,7 +88,7 @@ async def identify(
     """
     Identify a Sorcery: Contested Realm card from a photo.
 
-    - **image**: JPEG, PNG, or WebP, max 2 MB
+    - **image**: JPEG, PNG, or WebP, max 10 MB (resized internally to ≤1000px)
     - Returns top-5 candidates sorted by pHash distance (lower = better match)
     """
     if image.content_type not in ("image/jpeg", "image/png", "image/webp"):
@@ -101,7 +101,7 @@ async def identify(
     if len(data) > MAX_IMAGE_BYTES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Image exceeds 2 MB limit",
+            detail="Image exceeds 10 MB limit",
         )
 
     # CV2 inference is CPU-bound — run in thread pool, never block the event loop
