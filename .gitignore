@@ -10,10 +10,14 @@ build/
 venv/
 env/
 
-# Data & model artifacts — never commit
-data/
+# Data artifacts — large files excluded, small index files tracked
+data/*.npz
+data/*.faiss
 *.npz
 *.faiss
+# Allow hash DB and index (small, not sensitive, needed for Docker build)
+!data/hashes.json
+!data/index.json
 
 # Secrets — NEVER
 .env

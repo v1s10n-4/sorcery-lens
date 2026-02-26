@@ -1,19 +1,13 @@
-# Pin torch CPU-only wheel first — open-clip-torch will pull CUDA (~3GB) otherwise.
-# Must appear before open-clip-torch so pip resolves the already-installed torch.
---extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.2.2+cpu
-torchvision==0.17.2+cpu
-
 fastapi==0.115.6
 uvicorn[standard]==0.32.1
 python-multipart==0.0.20
-open-clip-torch==2.26.1
-faiss-cpu==1.9.0
 Pillow==11.0.0
 numpy==1.26.4
+opencv-python-headless==4.10.0.84
+ImageHash==4.3.1
 httpx==0.28.1
 slowapi==0.1.9
 python-dotenv==1.0.1
 pydantic-settings==2.7.0
-# Embedding generation script deps (not needed in the production Docker image)
+# Embedding/hash generation script deps (offline only)
 psycopg2-binary==2.9.10

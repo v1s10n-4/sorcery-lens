@@ -30,8 +30,8 @@ class Settings(BaseSettings):
     clip_model: str = "ViT-B-32"
     clip_pretrained: str = "openai"
 
-    # Index paths
-    embeddings_path: str = "data/embeddings.npz"
+    # Index / hash DB paths
+    hashes_path: str = "data/hashes.json"
     index_path: str = "data/index.json"
 
     @property
