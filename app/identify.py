@@ -81,6 +81,21 @@ def _load_index() -> Tuple[faiss.Index, List[CardEntry]]:
 
 # ── Public interface ──────────────────────────────────────────────────────────
 
+def _center_crop(img: Image.Image, ratio: float = 0.70) -> Image.Image:
+    """Crop to the center portion of the image.
+
+    Phone photos typically have lots of background around the card.
+    Cropping to the center ~70% removes most of the noise and
+    dramatically improves CLIP embedding quality.
+    """
+    w, h = img.size
+    new_w = int(w * ratio)
+    new_h = int(h * ratio)
+    left = (w - new_w) // 2
+    top = (h - new_h) // 2
+    return img.crop((left, top, left + new_w, top + new_h))
+
+
 def identify_image(image_bytes: bytes, top_k: int = 3) -> dict:
     """
     Given raw image bytes, return the top-k card matches.
@@ -94,6 +109,9 @@ def identify_image(image_bytes: bytes, top_k: int = 3) -> dict:
         img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     except Exception as exc:
         raise ValueError(f"Cannot decode image: {exc}") from exc
+
+    # Center-crop to remove background noise from phone photos
+    img = _center_crop(img, ratio=0.70)
 
     model, preprocess = _load_model()
     index, cards = _load_index()
